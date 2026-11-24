@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2563eb">
+<title>日次売上管理</title>
+<style>
+:root {
+  font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif;
+  color: #1f2937;
+  background: #f3f4f6;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 16px; }
+.app { max-width: 560px; margin: 0 auto; }
+header { text-align: center; margin: 8px 0 20px; }
+h1 { font-size: 1.45rem; margin: 0; }
+h2 { font-size: 1.15rem; margin: 0 0 14px; }
+.panel {
+  background: #fff; border-radius: 16px; padding: 18px;
+  box-shadow: 0 2px 10px #0000000a; margin-bottom: 14px;
+}
+.date { font-size: 1.15rem; font-weight: 700; text-align: center; }
+.date small { display: block; color: #6b7280; font-size: .78rem; font-weight: 500; margin-bottom: 4px; }
+.field { margin: 14px 0; }
+label { display: block; font-size: .9rem; color: #4b5563; margin-bottom: 6px; }
+input[type="number"], select {
+  width: 100%; min-height: 54px; padding: 10px 12px;
+  border: 1px solid #d1d5db; border-radius: 10px;
+  background: #fff; color: #111827; font-size: 1.35rem;
+}
+input:focus, select:focus { outline: 2px solid #93c5fd; border-color: #2563eb; }
+input[type="number"] { text-align: right; font-variant-numeric: tabular-nums; }
+.result {
+  padding: 14px; border-radius: 10px; background: #eff6ff;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.result strong { color: #1d4ed8; font-size: 1.45rem; font-variant-numeric: tabular-nums; }
+.buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+button {
+  border: 0; border-radius: 10px; padding: 13px 10px; min-height: 48px;
+  background: #e5e7eb; color: #1f2937; font-size: .92rem; font-weight: 650;
+  cursor: pointer;
+}
+button:active { transform: scale(.98); }
+button.primary { background: #2563eb; color: white; }
+button.secondary { background: #dbeafe; color: #1d4ed8; }
+button.danger { background: #fee2e2; color: #991b1b; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.nav button { padding: 12px 5px; font-size: .82rem; }
+.view { display: none; }
+.view.active { display: block; }
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.toolbar select { min-height: 42px; font-size: 1rem; flex: 1; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .83rem; white-space: nowrap; }
+th, td { padding: 10px 7px; border-bottom: 1px solid #e5e7eb; text-align: right; }
+th { background: #f9fafb; color: #6b7280; font-weight: 600; }
+th:first-child, td:first-child { text-align: left; }
+.total-row { font-weight: 750; background: #eff6ff; }
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 14px; }
+.summary-item { background: #f9fafb; padding: 12px; border-radius: 10px; }
+.summary-item span { display: block; color: #6b7280; font-size: .78rem; }
+.summary-item strong { display: block; margin-top: 5px; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.muted { color: #6b7280; font-size: .82rem; }
+.status { min-height: 1.3em; margin: 9px 0 0; text-align: center; color: #2563eb; font-size: .82rem; }
+.manage-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.empty { text-align: center; color: #6b7280; padding: 24px 8px; }
+.hidden { display: none !important; }
+@media (min-width: 480px) {
+  body { padding: 24px; }
+  .panel { padding: 22px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header><h1>日次売上管理</h1></header>
+
+  <section id="entryView" class="view active">
+    <div class="panel">
+      <div class="date"><small>前日の日付</small><span id="businessDate">----</span></div>
+      <div class="field">
+        <label for="totalInput">売上（円）</label>
+        <input id="totalInput" type="number" inputmode="numeric" min="0" step="1" placeholder="売上を入力">
+      </div>
+      <div class="field">
+        <label for="bentoInput">弁当売上（円）</label>
+        <input id="bentoInput" type="number" inputmode="numeric" min="0" step="1" placeholder="弁当売上を入力">
+      </div>
+      <div class="result">
+        <span>店内売上</span><strong id="insideOutput">¥ 0</strong>
+      </div>
+      <p id="saveStatus" class="status">金額を入力すると自動保存します</p>
+      <button id="copyButton" class="primary" style="width:100%; margin-top:8px">入力した値をコピー</button>
+    </div>
+
+    <div class="panel">
+      <h2>売上データ</h2>
+      <div class="nav">
+        <button data-view="listView">データ一覧</button>
+        <button data-view="monthView">月の売上</button>
+        <button data-view="yearView">年間の売上</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>データ管理</h2>
+      <div class="manage-buttons">
+        <button id="backupButton" class="secondary">JSONバックアップ</button>
+        <button id="restoreButton" class="secondary">JSON復元</button>
+      </div>
+      <input id="restoreFile" type="file" accept=".json,application/json" class="hidden">
+      <p class="muted">データはこのブラウザ内に保存されます。定期的にバックアップしてください。</p>
+    </div>
+  </section>
+
+  <section id="listView" class="view">
+    <div class="panel">
+      <h2>データ一覧</h2>
+      <div class="toolbar">
+        <button class="backButton">戻る</button>
+        <span class="muted" id="recordCount"></span>
+      </div>
+      <div id="listTable" class="table-wrap"></div>
+    </div>
+  </section>
+
+  <section id="monthView" class="view">
+    <div class="panel">
+      <h2>月の売上</h2>
+      <div class="toolbar">
+        <button class="backButton">戻る</button>
+        <select id="monthSelect" aria-label="対象月"></select>
+      </div>
+      <div id="monthSummary"></div>
+      <div id="monthTable" class="table-wrap"></div>
+    </div>
+  </section>
+
+  <section id="yearView" class="view">
+    <div class="panel">
+      <h2>年間の売上</h2>
+      <div class="toolbar">
+        <button class="backButton">戻る</button>
+        <select id="yearSelect" aria-label="対象年"></select>
+      </div>
+      <div id="yearSummary"></div>
+      <div id="yearTable" class="table-wrap"></div>
+    </div>
+  </section>
+  <p id="globalStatus" class="status" aria-live="polite"></p>
+</div>
+
+<script>
+"use strict";
+
+const STORAGE_KEY = "dailySalesRecords_v1";
+const $ = (id) => document.getElementById(id);
+let records = loadRecords();
+
+function japanDateString(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(date);
+  const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}`;
+}
+function previousDateString() {
+  const now = new Date();
+  const today = japanDateString(now);
+  const [y, m, d] = today.split("-").map(Number);
+  const previous = new Date(Date.UTC(y, m - 1, d - 1));
+  return previous.toISOString().slice(0, 10);
+}
+const businessDate = previousDateString();
+
+function formatDate(date) {
+  const [y, m, d] = date.split("-").map(Number);
+  const weekday = ["日", "月", "火", "水", "木", "金", "土"][new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${y}年${m}月${d}日（${weekday}）`;
+}
+function yen(value) {
+  return "¥" + Number(value || 0).toLocaleString("ja-JP");
+}
+function loadRecords() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const data = raw ? JSON.parse(raw) : [];
+    return Array.isArray(data) ? data.filter(validRecord).sort((a, b) => a.date.localeCompare(b.date)) : [];
+  } catch (e) {
+    console.error("保存データの読み込みに失敗:", e);
+    return [];
+  }
+}
+function validRecord(item) {
+  return item && /^\d{4}-\d{2}-\d{2}$/.test(item.date)
+    && Number.isSafeInteger(item.total) && item.total >= 0
+    && Number.isSafeInteger(item.bento) && item.bento >= 0
+    && item.bento <= item.total;
+}
+function saveRecords() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    return true;
+  } catch (e) {
+    alert("保存できませんでした。ブラウザの保存容量などを確認してください。");
+    return false;
+  }
+}
+function findRecord(date) {
+  return records.find(r => r.date === date);
+}
+function showView(viewId) {
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  $(viewId).classList.add("active");
+  if (viewId === "listView") renderList();
+  if (viewId === "monthView") renderMonth();
+  if (viewId === "yearView") renderYear();
+  window.scrollTo({ top: 0, behavior: "instant" });
+}
+function readInputs() {
+  const totalText = $("totalInput").value.trim();
+  const bentoText = $("bentoInput").value.trim();
+  if (totalText === "" || bentoText === "") return null;
+  const total = Number(totalText), bento = Number(bentoText);
+  if (!Number.isSafeInteger(total) || !Number.isSafeInteger(bento)
+      || total < 0 || bento < 0 || bento > total) return null;
+  return { date: businessDate, total, bento, inside: total - bento };
+}
+function updateCalculation() {
+  const total = Number($("totalInput").value || 0);
+  const bento = Number($("bentoInput").value || 0);
+  const inside = total - bento;
+  $("insideOutput").textContent = yen(inside >= 0 ? inside : 0);
+  const value = readInputs();
+  if (!value) {
+    $("saveStatus").textContent = $("totalInput").value || $("bentoInput").value
+      ? "売上と弁当売上を入力してください（弁当売上は売上以下）"
+      : "金額を入力すると自動保存します";
+    return;
+  }
+  const index = records.findIndex(r => r.date === businessDate);
+  const record = { date: value.date, total: value.total, bento: value.bento };
+  if (index >= 0) records[index] = record;
+  else records.push(record);
+  records.sort((a, b) => a.date.localeCompare(b.date));
+  if (saveRecords()) $("saveStatus").textContent = "保存しました";
+}
+function loadEntry() {
+  $("businessDate").textContent = formatDate(businessDate);
+  const existing = findRecord(businessDate);
+  $("totalInput").value = existing ? existing.total : "";
+  $("bentoInput").value = existing ? existing.bento : "";
+  updateCalculation();
+}
+async function copyEntry() {
+  const value = readInputs();
+  if (!value) {
+    alert("売上と弁当売上を正しく入力してください。");
+    return;
+  }
+  const text = `${formatDate(value.date)}\n売上：${value.total.toLocaleString("ja-JP")}円\n店内売上：${value.inside.toLocaleString("ja-JP")}円\n弁当売上：${value.bento.toLocaleString("ja-JP")}円`;
+  try {
+    await navigator.clipboard.writeText(text);
+    $("saveStatus").textContent = "入力内容をコピーしました";
+  } catch (e) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    $("saveStatus").textContent = ok ? "入力内容をコピーしました" : "コピーできませんでした";
+  }
+}
+function tableHTML(rows, includeDate = true) {
+  if (!rows.length) return '<p class="empty">データがありません</p>';
+  const body = rows.map(r => `<tr>
+    ${includeDate ? `<td>${formatDate(r.date)}</td>` : ""}
+    <td>${yen(r.total)}</td><td>${yen(r.total - r.bento)}</td><td>${yen(r.bento)}</td>
+  </tr>`).join("");
+  return `<table><thead><tr>${includeDate ? "<th>日付</th>" : ""}
+    <th>売上</th><th>店内</th><th>弁当</th></tr></thead><tbody>${body}</tbody></table>`;
+}
+function totals(rows) {
+  return rows.reduce((sum, r) => {
+    sum.total += r.total; sum.bento += r.bento; sum.inside += r.total - r.bento;
+    return sum;
+  }, { total: 0, inside: 0, bento: 0 });
+}
+function summaryHTML(sum, count) {
+  return `<div class="summary-grid">
+    <div class="summary-item"><span>売上合計</span><strong>${yen(sum.total)}</strong></div>
+    <div class="summary-item"><span>店内売上合計</span><strong>${yen(sum.inside)}</strong></div>
+    <div class="summary-item"><span>弁当売上合計</span><strong>${yen(sum.bento)}</strong></div>
+    <div class="summary-item"><span>記録日数</span><strong>${count}日</strong></div>
+  </div>`;
+}
+function renderList() {
+  const rows = [...records].sort((a, b) => b.date.localeCompare(a.date));
+  $("recordCount").textContent = `${rows.length}件`;
+  $("listTable").innerHTML = tableHTML(rows);
+}
+function fillSelectors() {
+  const oldMonth = $("monthSelect").value;
+  const oldYear = $("yearSelect").value;
+  const months = new Set(records.map(r => r.date.slice(0, 7)));
+  months.add(businessDate.slice(0, 7));
+  const monthList = [...months].sort().reverse();
+  $("monthSelect").innerHTML = monthList
+    .map(m => `<option value="${m}">${m.replace("-", "年")}月</option>`).join("");
+  $("monthSelect").value = monthList.includes(oldMonth) ? oldMonth : businessDate.slice(0, 7);
+
+  const years = new Set(records.map(r => r.date.slice(0, 4)));
+  years.add(businessDate.slice(0, 4));
+  const yearList = [...years].sort().reverse();
+  $("yearSelect").innerHTML = yearList
+    .map(y => `<option value="${y}">${y}年</option>`).join("");
+  $("yearSelect").value = yearList.includes(oldYear) ? oldYear : businessDate.slice(0, 4);
+}
+function renderMonth() {
+  fillSelectors();
+  const month = $("monthSelect").value || businessDate.slice(0, 7);
+  const rows = records.filter(r => r.date.startsWith(month)).sort((a, b) => a.date.localeCompare(b.date));
+  $("monthSummary").innerHTML = summaryHTML(totals(rows), rows.length);
+  $("monthTable").innerHTML = tableHTML(rows);
+}
+function renderYear() {
+  fillSelectors();
+  const year = $("yearSelect").value || businessDate.slice(0, 4);
+  const rows = records.filter(r => r.date.startsWith(year));
+  $("yearSummary").innerHTML = summaryHTML(totals(rows), rows.length);
+  const monthly = Array.from({ length: 12 }, (_, i) => {
+    const month = `${year}-${String(i + 1).padStart(2, "0")}`;
+    const part = rows.filter(r => r.date.startsWith(month));
+    return { month: `${i + 1}月`, ...totals(part), count: part.length };
+  });
+  $("yearTable").innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>月</th><th>売上</th><th>店内</th><th>弁当</th></tr></thead>
+    <tbody>${monthly.map(m => `<tr><td>${m.month}</td><td>${yen(m.total)}</td><td>${yen(m.inside)}</td><td>${yen(m.bento)}</td></tr>`).join("")}</tbody>
+  </table></div>`;
+}
+function backup() {
+  const payload = {
+    app: "日次売上管理",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    sales: records
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `売上バックアップ_${japanDateString()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  $("globalStatus").textContent = "バックアップファイルを作成しました";
+}
+function restore() { $("restoreFile").click(); }
+$("restoreFile").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const parsed = JSON.parse(await file.text());
+    const imported = Array.isArray(parsed) ? parsed : parsed.sales;
+    if (!Array.isArray(imported) || !imported.every(validRecord)) {
+      throw new Error("データ形式が正しくありません");
+    }
+    const mode = prompt(
+      "復元方法を選んでください。\n1：追加（同じ日付はバックアップ側で上書き）\n2：全件上書き（現在のデータを置き換え）\n0：キャンセル",
+      "1"
+    );
+    if (mode !== "1" && mode !== "2") return;
+    if (mode === "2" && !confirm("現在の売上データをすべて置き換えます。よろしいですか？")) return;
+    if (mode === "2") {
+      records = imported.map(r => ({ date: r.date, total: r.total, bento: r.bento }));
+    } else {
+      const map = new Map(records.map(r => [r.date, r]));
+      imported.forEach(r => map.set(r.date, { date: r.date, total: r.total, bento: r.bento }));
+      records = [...map.values()];
+    }
+    records.sort((a, b) => a.date.localeCompare(b.date));
+    if (saveRecords()) {
+      $("globalStatus").textContent = `${imported.length}件のデータを復元しました`;
+      loadEntry();
+    }
+  } catch (e) {
+    alert("復元できませんでした。\n" + e.message);
+  } finally {
+    event.target.value = "";
+  }
+});
+
+$("totalInput").addEventListener("input", updateCalculation);
+$("bentoInput").addEventListener("input", updateCalculation);
+$("copyButton").addEventListener("click", copyEntry);
+$("backupButton").addEventListener("click", backup);
+$("restoreButton").addEventListener("click", restore);
+document.querySelectorAll("[data-view]").forEach(button => {
+  button.addEventListener("click", () => showView(button.dataset.view));
+});
+document.querySelectorAll(".backButton").forEach(button => {
+  button.addEventListener("click", () => showView("entryView"));
+});
+$("monthSelect").addEventListener("change", renderMonth);
+$("yearSelect").addEventListener("change", renderYear);
+
+loadEntry();
+</script>
+</body>
+</html>
